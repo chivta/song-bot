@@ -98,25 +98,29 @@ Flux reconciles them — nothing is applied by hand.
 
 ### Secrets
 
-Secrets are pure GitOps. Both live under `k8s/secrets/`, SOPS-encrypted, and are
-the **only** copies — there is no gitignored plaintext twin to keep in sync and
-nothing to create by hand before Flux can reconcile:
-
-- `app-secrets.enc.yaml` — `BOT_TOKEN` and `ALLOWED_USERS`
-- `ghcr-secret.enc.yaml` — the GHCR pull secret, the same registry credentials
-  the other bots use
-
-Each is encrypted to two recipients: the shared `ruscan` age key, which Flux
-already holds in-cluster as `ruscan-sops-age` and which this app's Kustomization
-decrypts with, and the local dev key, so the files can be edited without the
-cluster. Edit them in place — SOPS re-encrypts on save:
+`BOT_TOKEN` and `ALLOWED_USERS` live in `k8s/secrets.yaml`, which is
+**gitignored**, and are committed only in SOPS-encrypted form as
+`k8s/secrets.enc.yaml` — the same layout instalker uses. Encryption targets the
+shared `ruscan` age recipient, so Flux decrypts it in-cluster with the existing
+`ruscan-sops-age` secret, plus the local dev key so the file can be edited
+without the cluster.
 
 ```sh
-sops k8s/secrets/app-secrets.enc.yaml
+sops -d k8s/secrets.enc.yaml > k8s/secrets.yaml
+$EDITOR k8s/secrets.yaml
+sops -e k8s/secrets.yaml > k8s/secrets.enc.yaml
 ```
 
-The namespace comes from `k8s/namespace.yaml` in the same kustomization, so a
-fresh cluster needs no bootstrap step at all.
+The registry pull secret is the one thing SOPS does not cover, since it is a
+cluster-level docker config rather than app config:
+
+```sh
+cp .env.secrets.example .env.secrets   # GHCR credentials only
+./create-secrets.sh                    # creates the namespace and ghcr-secret
+```
+
+The PAT needs `read:packages`. If image pulls fail with a 403 from
+`ghcr.io/token`, that token has expired — it is the usual cause.
 
 The SQLite file and the binary cache share a 5Gi `ReadWriteOnce` PVC at
 `/app/data`. Because that volume cannot be attached twice, the Deployment uses
@@ -142,7 +146,7 @@ Telegram forbids bots from opening a conversation, so each allowed user sends
 `/start` themselves once.
 
 `ALLOWED_USERS` is set, so the bot is private: only the Telegram user IDs listed
-in `app-secrets.enc.yaml` are answered and everyone else is turned away. Clearing
+in `k8s/secrets.yaml` are answered and everyone else is turned away. Clearing
 it would make the bot public.
 
 ## Notes

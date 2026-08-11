@@ -4,7 +4,4 @@ data/
 /songbot.log
 .tmp/
 .env.secrets
-# Secrets are gitops-only: the .enc.yaml files under k8s/secrets are the sole
-# copies, edited in place with sops. Any stray plaintext must never be staged.
-k8s/secrets/*.yaml
-!k8s/secrets/*.enc.yaml
+k8s/secrets.yaml

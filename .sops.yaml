@@ -1,9 +1,9 @@
 creation_rules:
-  - path_regex: k8s/secrets/.*\.enc\.yaml$
+  - path_regex: k8s/secrets.yaml
     encrypted_regex: ^(data|stringData)$
-    # Recipients: the shared ruscan age key, which Flux already holds in-cluster
-    # as `ruscan-sops-age` and which the songbot Kustomization decrypts with,
-    # plus the local dev key so these files can be edited without the cluster.
+    # The shared ruscan age key, which Flux holds in-cluster as
+    # `ruscan-sops-age`, plus the local dev key so the file can be decrypted
+    # and edited without the cluster.
     age: >-
       age10d00xrpljw4cga37ad0gt7se4nsehp5uv8yy3grkfqygd4pzyffqj3gr46,
       age1sh4gkd6vtq97pl0fwc43mfq5sh5f0a92t2zm8ktk5h3fln0cs43qfpgm3t
