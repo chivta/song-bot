@@ -141,6 +141,13 @@ func (c *Client) command() *ytdlp.Command {
 	return ytdlp.New().
 		SetExecutable(c.bins.YTDLP).
 		NoWarnings().
+		// yt-dlp resolves names through the C library, not Go's resolver, and
+		// musl asks for A and AAAA records in parallel. Under Kubernetes that
+		// pair is unreliable for names backed by many records — YouTube's
+		// answers are large enough to be truncated or raced away, which
+		// surfaces as "Name has no usable address" even though the same host
+		// resolves fine from this process. One IPv4 query avoids all of it.
+		ForceIPv4().
 		Retries(retries).
 		SocketTimeout(socketTimeout)
 }
