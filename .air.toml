@@ -1,0 +1,9 @@
+root = "."
+tmp_dir = ".tmp"
+
+[build]
+  cmd = "go build -o ./.tmp/songbot ./cmd/songbot"
+  bin = "./.tmp/songbot"
+  include_ext = ["go", "sql"]
+  exclude_dir = [".tmp", "data"]
+  delay = 500
