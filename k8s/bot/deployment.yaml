@@ -23,6 +23,13 @@ spec:
       # Long enough for a download that is already uploading to Telegram to
       # finish; anything slower is cut off and the user simply asks again.
       terminationGracePeriodSeconds: 60
+      # The node's resolvers instead of CoreDNS. yt-dlp resolves through musl,
+      # which fails on the cluster resolver for names backed by large record
+      # sets — YouTube's, though not GitHub's, which is why binary downloads
+      # succeeded while every search did not. This bot talks to nothing inside
+      # the cluster, so it gives up nothing it uses: it also drops the five
+      # search domains and ndots:5 that musl handles poorly.
+      dnsPolicy: Default
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
