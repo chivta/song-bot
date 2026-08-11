@@ -46,14 +46,9 @@ func New(token string, allowedUsers []int64) (*Bot, error) {
 		return nil, err
 	}
 
-	allowed := make(map[int64]bool, len(allowedUsers))
-	for _, id := range allowedUsers {
-		allowed[id] = true
-	}
-
 	return &Bot{
 		bot:     inner,
-		allowed: allowed,
+		allowed: allowList(allowedUsers),
 		sends:   newSendLimiter(sendRate, sendBurst),
 	}, nil
 }
@@ -128,16 +123,34 @@ func (b *Bot) handleRequest(c tele.Context) error {
 	return nil
 }
 
-// authorized reports whether the sender may use the bot.
+// authorized reports whether the sender of an update may use the bot.
 func (b *Bot) authorized(c tele.Context) bool {
+	sender := c.Sender()
+	if sender == nil {
+		// An update with no identifiable sender is only let through when the
+		// bot is public anyway.
+		return len(b.allowed) == 0
+	}
+
+	return b.allows(sender.ID)
+}
+
+// allows reports whether a user ID is on the allow list. An empty list means
+// no list was configured, which makes the bot public.
+func (b *Bot) allows(id int64) bool {
 	if len(b.allowed) == 0 {
 		return true
 	}
 
-	sender := c.Sender()
-	if sender == nil {
-		return false
+	return b.allowed[id]
+}
+
+// allowList indexes the configured user IDs for lookup.
+func allowList(ids []int64) map[int64]bool {
+	allowed := make(map[int64]bool, len(ids))
+	for _, id := range ids {
+		allowed[id] = true
 	}
 
-	return b.allowed[sender.ID]
+	return allowed
 }
