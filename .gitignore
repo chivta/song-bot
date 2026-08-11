@@ -1,0 +1,7 @@
+.env
+data/
+/songbot
+/songbot.log
+.tmp/
+.env.secrets
+k8s/secrets.yaml
