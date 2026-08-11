@@ -21,7 +21,7 @@ import (
 	"github.com/arvlas/song-bot/internal/youtube"
 )
 
-// components is how many long-running goroutines run wants to collect from.
+// components is how many long-running goroutines run collects errors from.
 const components = 3
 
 // mebibyte converts the configured size cap into bytes.
@@ -44,25 +44,40 @@ func main() {
 }
 
 func run(cfg config.Config) error {
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	signalCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// yt-dlp and ffmpeg are fetched before anything else: without them there is
-	// nothing the bot can usefully answer.
+	// A cancellable child of the signal context, so a failure during startup
+	// can bring down whatever is already running.
+	ctx, cancel := context.WithCancel(signalCtx)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	errs := make(chan error, components)
+
+	// The probe server goes up first and stays up for the whole run. Resolving
+	// yt-dlp on a cold volume downloads it, which can outlast the liveness
+	// probe's budget; answering /health throughout is what stops Kubernetes
+	// from killing the pod mid-download.
+	probes := health.New(cfg.HTTPAddr, metrics.Handler())
+	wg.Go(func() { errs <- probes.Run(ctx) })
+
+	// yt-dlp and ffmpeg come next: without them there is nothing the bot can
+	// usefully answer.
 	bins, err := youtube.Install(ctx, cfg.YTDLPDir, cfg.YTDLPPath)
 	if err != nil {
-		return err
+		return shutdown(cancel, &wg, errs, err)
 	}
 
 	db, err := storage.Open(ctx, cfg.DBPath)
 	if err != nil {
-		return err
+		return shutdown(cancel, &wg, errs, err)
 	}
 	defer db.Close()
 
 	telegram, err := bot.New(cfg.BotToken, cfg.AllowedUsers)
 	if err != nil {
-		return fmt.Errorf("create telegram bot: %w", err)
+		return shutdown(cancel, &wg, errs, fmt.Errorf("create telegram bot: %w", err))
 	}
 
 	yt := youtube.New(bins, cfg.AudioFormat, cfg.AudioQuality, cfg.SearchResults)
@@ -82,19 +97,25 @@ func run(cfg config.Config) error {
 		WorkDir:         cfg.WorkDir,
 	})
 
-	probes := health.New(cfg.HTTPAddr, metrics.Handler())
-
-	var wg sync.WaitGroup
-	errs := make(chan error, components)
-
 	wg.Go(func() { errs <- pipeline.Run(ctx) })
 	wg.Go(func() { errs <- telegram.Run(ctx, pipeline) })
-	wg.Go(func() { errs <- probes.Run(ctx) })
+
+	return shutdown(nil, &wg, errs, nil)
+}
+
+// shutdown waits for every started component to return and folds their errors
+// together with cause. Passing a non-nil cancel stops them first, which is what
+// a startup failure needs; a nil cancel means the components are already
+// winding down on their own.
+func shutdown(cancel context.CancelFunc, wg *sync.WaitGroup, errs chan error, cause error) error {
+	if cancel != nil {
+		cancel()
+	}
 
 	wg.Wait()
 	close(errs)
 
-	var joined error
+	joined := cause
 	for err := range errs {
 		joined = errors.Join(joined, err)
 	}

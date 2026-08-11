@@ -15,9 +15,12 @@ COPY . .
 RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /out/songbot ./cmd/songbot
 
 FROM alpine:3.21 AS production
-# The downloaded yt-dlp/ffmpeg builds are glibc binaries and will not exec on
-# musl without libc6-compat.
-RUN apk add --no-cache ca-certificates wget libc6-compat && adduser -D -u 10001 songbot
+# ffmpeg and ffprobe come from Alpine, not from go-ytdlp's downloader: the
+# builds it fetches are glibc-linked with no musl variant published, so they
+# cannot exec here. yt-dlp itself is still downloaded at runtime, since it does
+# ship a musl build. libc6-compat covers the yt-dlp glibc fallback path in case
+# musl detection ever misfires.
+RUN apk add --no-cache ca-certificates wget libc6-compat ffmpeg && adduser -D -u 10001 songbot
 WORKDIR /app
 COPY --from=builder /out/songbot /app/songbot
 # The state volume mounts here; owning it up front keeps the container writable

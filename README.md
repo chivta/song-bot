@@ -74,13 +74,26 @@ docker build --target production -t songbot .
 
 ## yt-dlp and ffmpeg
 
-They are **not** baked into the image. On startup the app downloads them into
-`YTDLP_DIR` via [`go-ytdlp`](https://github.com/lrstanley/go-ytdlp), which
-verifies each binary against the release's signed SHA-256 sums. That directory
-sits on the persistent volume, so a restart reuses them.
+The two are handled differently, on purpose.
 
-This is deliberate: YouTube breaks extractors far more often than this bot
+**yt-dlp is downloaded at startup** into `YTDLP_DIR` by
+[`go-ytdlp`](https://github.com/lrstanley/go-ytdlp), which verifies it against
+the release's signed SHA-256 sums. That directory sits on the persistent volume,
+so a restart reuses it. YouTube breaks extractors far more often than this bot
 changes, and a yt-dlp bump should not require an app release.
+
+**ffmpeg comes from the image** (`apk add ffmpeg`) and is resolved from `PATH`.
+It cannot be downloaded: go-ytdlp fetches BtbN's builds, which are glibc-linked
+with no musl variant published, so on Alpine they fail to exec with
+`exit status 127`. Alpine's own build is musl-native and works. ffmpeg is a
+stable dependency that does not need chasing, so baking it in costs nothing.
+
+Startup deletes any ffmpeg or ffprobe in the managed cache that fails to run.
+That matters twice over: go-ytdlp resolves its cache ahead of `PATH` and
+hard-fails on a binary it cannot execute, and it prepends that cache directory
+to `PATH` when invoking yt-dlp, where a broken binary would shadow the working
+system one during post-processing. A volume carrying a bad copy heals itself on
+the next start.
 
 The version go-ytdlp installs is the one it was built against, and its checksum
 verification is tied to that version — so `YTDLP_VERSION` is not a knob that
@@ -88,8 +101,13 @@ could work. To run a different build, put the binary somewhere readable and
 point `YTDLP_PATH` at it; the app then uses it verbatim and skips the managed
 install. The routine upgrade path is bumping `github.com/lrstanley/go-ytdlp`.
 
-The production image is Alpine rather than distroless because the downloaded
-ffmpeg builds are glibc binaries and need `libc6-compat` to exec.
+The production image is Alpine rather than distroless because ffmpeg and a
+shell-based healthcheck both need a real userland.
+
+The probe server starts before any of this, so a first start on a cold volume —
+which downloads ~37 MB of yt-dlp — answers `/health` throughout instead of being
+killed by the liveness probe. A `startupProbe` allows five minutes for it, and a
+download that times out is retried in process rather than crashing the pod.
 
 ## Deploying
 
