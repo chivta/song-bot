@@ -37,7 +37,7 @@ spec:
         fsGroup: 10001
       containers:
         - name: songbot
-          image: ghcr.io/chivta/song-bot:05e9e1adaa14d3e530e58e43a139faf6778f7039
+          image: ghcr.io/chivta/song-bot:24522dea739c893fbc9d90e76c5c6a9a8256e63e
           ports:
             - name: http
               containerPort: 8080
