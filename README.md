@@ -119,8 +119,8 @@ Flux reconciles them — nothing is applied by hand.
 `BOT_TOKEN` and `ALLOWED_USERS` live in `k8s/secrets.yaml`, which is
 **gitignored**, and are committed only in SOPS-encrypted form as
 `k8s/secrets.enc.yaml` — the same layout instalker uses. Encryption targets the
-shared `ruscan` age recipient, so Flux decrypts it in-cluster with the existing
-`ruscan-sops-age` secret, plus the local dev key so the file can be edited
+shared app age recipient, so Flux decrypts it in-cluster with the existing
+`apps-sops-age` secret, plus the local dev key so the file can be edited
 without the cluster.
 
 ```sh
