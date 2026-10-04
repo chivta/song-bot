@@ -129,16 +129,7 @@ $EDITOR k8s/secrets.yaml
 sops -e k8s/secrets.yaml > k8s/secrets.enc.yaml
 ```
 
-The registry pull secret is the one thing SOPS does not cover, since it is a
-cluster-level docker config rather than app config:
-
-```sh
-cp .env.secrets.example .env.secrets   # GHCR credentials only
-./create-secrets.sh                    # creates the namespace and ghcr-secret
-```
-
-The PAT needs `read:packages`. If image pulls fail with a 403 from
-`ghcr.io/token`, that token has expired — it is the usual cause.
+Image pulls from GHCR authenticate through the k3s node's `registries.yaml`, so the namespace needs no pull secret.
 
 The SQLite file and the binary cache share a 5Gi `ReadWriteOnce` PVC at
 `/app/data`. Because that volume cannot be attached twice, the Deployment uses

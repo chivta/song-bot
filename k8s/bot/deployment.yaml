@@ -94,8 +94,6 @@ spec:
             claimName: songbot
         - name: tmp
           emptyDir: { sizeLimit: 2Gi }
-      imagePullSecrets:
-        - name: ghcr-secret
 
 ---
 apiVersion: v1
